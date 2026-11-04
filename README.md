@@ -131,6 +131,7 @@ docker-compose.yml      backend + frontend + Caddy
 Caddyfile               TLS termination and reverse proxy
 ```
 
-> `RoomsBackend/` and `roomfrontend/` still contain their own `.git`
-> directories from before the merge. Remove or reconcile those before
-> initializing git at the repository root.
+> `RoomsBackend/` and `roomfrontend/` were merged into this repository with
+> their commit histories rewritten under those folders. The two old `.git`
+> directories are no longer present; the root repository is now the single
+> source of truth.
