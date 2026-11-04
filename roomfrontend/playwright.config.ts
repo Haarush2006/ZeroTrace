@@ -1,0 +1,64 @@
+import { existsSync } from "node:fs"
+import path from "node:path"
+import { defineConfig, devices } from "@playwright/test"
+
+const FRONTEND_PORT = 3100
+const BACKEND_PORT = 8081
+
+const FRONTEND_ORIGIN = `http://localhost:${FRONTEND_PORT}`
+const WS_URL = `ws://localhost:${BACKEND_PORT}/ws`
+
+// The backend is a workspace sibling. If this folder is checked out on its own,
+// the scripted-socket tests still run and the real-backend tests skip themselves.
+const repoRoot = path.resolve(__dirname, "..")
+const backendAvailable = existsSync(path.join(repoRoot, "RoomsBackend", "package.json"))
+
+if (backendAvailable) process.env.E2E_HAS_BACKEND = "1"
+
+export default defineConfig({
+  testDir: "./e2e",
+  fullyParallel: false,
+  workers: 1,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : [["list"]],
+  timeout: 30_000,
+  expect: { timeout: 8_000 },
+
+  use: {
+    baseURL: FRONTEND_ORIGIN,
+    trace: "on-first-retry",
+    video: "retain-on-failure",
+  },
+
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+
+  webServer: [
+    ...(backendAvailable
+      ? [
+          {
+            // Real backend, rebuilt from the workspace root so the tests always
+            // run against the current protocol.
+            command: `npm --prefix "${repoRoot}" run build:backend && npm --prefix "${repoRoot}" run start:backend`,
+            url: `http://localhost:${BACKEND_PORT}/health`,
+            reuseExistingServer: !process.env.CI,
+            timeout: 120_000,
+            env: {
+              PORT: String(BACKEND_PORT),
+              ALLOWED_ORIGINS: FRONTEND_ORIGIN,
+              SWEEP_MS: "500",
+            },
+          },
+        ]
+      : []),
+    {
+      command: `npm run dev -- -p ${FRONTEND_PORT}`,
+      url: FRONTEND_ORIGIN,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: {
+        NEXT_PUBLIC_WS_URL: WS_URL,
+      },
+    },
+  ],
+})

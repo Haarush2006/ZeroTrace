@@ -1,0 +1,53 @@
+name: ephemeral-rooms
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: RoomsBackend/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      ALLOWED_ORIGINS: ${PUBLIC_ORIGIN:-http://localhost}
+      ROOM_TTL_MS: ${ROOM_TTL_MS:-1800000}
+      ROOM_EMPTY_GRACE_MS: ${ROOM_EMPTY_GRACE_MS:-120000}
+      MAX_ROOMS: ${MAX_ROOMS:-5000}
+      MAX_USERS_PER_ROOM: ${MAX_USERS_PER_ROOM:-50}
+      MAX_MESSAGES_PER_ROOM: ${MAX_MESSAGES_PER_ROOM:-500}
+    expose:
+      - "8080"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: roomfrontend/Dockerfile
+      args:
+        # Inlined into the client bundle at build time; rebuild when it changes.
+        NEXT_PUBLIC_WS_URL: ${PUBLIC_WS_URL:-ws://localhost/ws}
+    restart: unless-stopped
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PUBLIC_ADDRESS: ${PUBLIC_ADDRESS:-http://localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  caddy_data:
+  caddy_config:

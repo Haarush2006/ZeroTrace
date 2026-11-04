@@ -1,0 +1,26 @@
+{
+  "name": "chat-app-privacy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ephemeral WebSocket chat rooms that self-destruct after inactivity",
+  "workspaces": ["packages/*", "RoomsBackend", "roomfrontend"],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.mjs",
+    "build": "npm run build -w @chat/protocol && npm run build -w roomsbackend && npm run build -w roomfrontend",
+    "build:protocol": "npm run build -w @chat/protocol",
+    "build:backend": "npm run build -w @chat/protocol && npm run build -w roomsbackend",
+    "build:frontend": "npm run build -w @chat/protocol && npm run build -w roomfrontend",
+    "dev:backend": "npm run dev -w roomsbackend",
+    "dev:frontend": "npm run dev -w roomfrontend",
+    "start:backend": "npm run start -w roomsbackend",
+    "start:frontend": "npm run start -w roomfrontend",
+    "test": "npm run test -w roomsbackend",
+    "test:watch": "npm run test:watch -w roomsbackend",
+    "typecheck": "npm run typecheck -w @chat/protocol && npm run typecheck -w roomsbackend && npm run typecheck -w roomfrontend",
+    "lint": "npm run lint -w roomfrontend",
+    "test:e2e": "npm run test:e2e -w roomfrontend"
+  }
+}
