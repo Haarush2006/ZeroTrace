@@ -9,7 +9,9 @@ const BACKEND_PORT = process.env.E2E_PRODUCTION === "1" ? 8080 : 8081
 const FRONTEND_ORIGIN = `http://localhost:${FRONTEND_PORT}`
 const WS_URL = `ws://localhost:${BACKEND_PORT}/ws`
 const production = process.env.E2E_PRODUCTION === "1"
-const firefox = process.env.E2E_BROWSER === "firefox"
+const browserName = process.env.E2E_BROWSER ?? "chromium"
+const browserProject = browserName === "firefox" ? "firefox" : browserName === "webkit" ? "webkit" : "chromium"
+const browserDevice = browserName === "firefox" ? "Desktop Firefox" : browserName === "webkit" ? "Desktop Safari" : "Desktop Chrome"
 
 // The backend is a workspace sibling. If this folder is checked out on its own,
 // the scripted-socket tests still run and the real-backend tests skip themselves.
@@ -34,7 +36,7 @@ export default defineConfig({
     video: "retain-on-failure",
   },
 
-  projects: [{ name: firefox ? "firefox" : "chromium", use: { ...devices[firefox ? "Desktop Firefox" : "Desktop Chrome"] } }],
+  projects: [{ name: browserProject, use: { ...devices[browserDevice] } }],
 
   webServer: [
     ...(backendAvailable

@@ -12,13 +12,14 @@ Environment: Windows, Node 22, npm workspaces, Playwright browsers.
 | Production build | Passed |
 | Chromium production standalone browser suite | 24 passed |
 | Firefox production browser suite | 23 passed; 1 clipboard-permission test skipped |
+| WebKit production browser suite | 23 passed; 1 clipboard-permission test skipped |
 | Development Chromium suite | 21 passed before the final 3 browser cases were added; all 24 cases passed against production |
 | Startup helper syntax / Git whitespace checks | Passed |
 
-Firefox was tested against the production bundle using `next start`; Chromium
-was subsequently tested through the corrected standalone startup helper against
-the same bundle. Firefox's clipboard-denied fallback test passes. Its direct
-clipboard readback test is skipped because the permission grant is Chromium-only.
+Firefox and WebKit were tested against the production bundle using the
+standalone startup helper; Chromium was tested against the same bundle as well.
+The clipboard-denied fallback passes in all browsers. Direct clipboard readback
+is skipped outside Chromium because the permission grant is Chromium-only.
 
 These results describe executed checks, not a guarantee that every possible
 device, network condition, or deployment has been tested.
@@ -112,6 +113,13 @@ Firefox:
 ```bash
 npx playwright install firefox
 E2E_PRODUCTION=1 E2E_BROWSER=firefox npm run test:e2e
+```
+
+WebKit/Safari engine:
+
+```bash
+npx playwright install webkit
+E2E_PRODUCTION=1 E2E_BROWSER=webkit npm run test:e2e
 ```
 
 Default browser is Chromium; install it with `npx playwright install chromium`
