@@ -77,6 +77,47 @@ async function openRoom(page: Page): Promise<void> {
 }
 
 test.describe("expiry and reconnect (scripted socket)", () => {
+  test("presence refreshes the countdown using the server deadline", async ({ page }) => {
+    fakeBackend(page)
+    await openRoom(page)
+    // Use a second routed test connection script with a short initial deadline.
+    await page.routeWebSocket(/\/ws$/, (ws) => {
+      ws.onMessage(() => {
+        send(ws, { ...ready(), expiresAt: Date.now() + 5000 })
+        send(ws, { ...presence(), expiresAt: Date.now() + 120_000 })
+      })
+    })
+    await page.reload()
+    await expect(page.getByText(/expires in [12]:/)).toBeVisible()
+  })
+
+  test("exhausted reconnect attempts show an actionable error", async ({ page }) => {
+    await page.clock.install()
+    await page.routeWebSocket(/\/ws$/, (ws) => {
+      ws.onMessage(() => void ws.close({ code: 1011, reason: "unavailable" }))
+    })
+    await page.goto("/")
+    await page.getByLabel("Username").fill("Alice")
+    await page.getByRole("button", { name: "Create a room" }).click()
+    for (const delay of [500, 1000, 2000, 4000, 8000, 10000]) {
+      await expect(page.getByText("Reconnecting to the chat server…")).toBeVisible()
+      await page.clock.runFor(delay + 100)
+    }
+    await expect(page.getByText("Can't reach the chat server. Is the backend running?")).toBeVisible()
+    await expect(page.getByRole("button", { name: "Create a room" })).toBeEnabled()
+  })
+
+  test("a rejected create displays its error and allows a retry", async ({ page }) => {
+    await page.routeWebSocket(/\/ws$/, (ws) => {
+      ws.onMessage(() => send(ws, { type: "error", code: "rate_limited", message: "Slow down" }))
+    })
+    await page.goto("/")
+    await page.getByLabel("Username").fill("Alice")
+    await page.getByRole("button", { name: "Create a room" }).click()
+    await expect(page.getByRole("alert").filter({ hasText: "Slow down" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Create a room" })).toBeEnabled()
+  })
+
   test("an expired event replaces the chat with the expired screen", async ({ page }) => {
     fakeBackend(page, (ws) => {
       setTimeout(() => {

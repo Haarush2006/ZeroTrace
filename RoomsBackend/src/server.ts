@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { createServer, type Server as HttpServer } from "node:http"
-import type { AddressInfo } from "node:net"
+import { isIP, type AddressInfo } from "node:net"
 import type { Duplex } from "node:stream"
 import { WebSocket, WebSocketServer } from "ws"
 import type { AppConfig } from "./config"
@@ -148,9 +148,12 @@ export function createChatServer(config: AppConfig, options: ChatServerOptions =
 
   function broadcastPresence(roomId: string): void {
     const snapshot = store.snapshot(roomId)
-    if (!snapshot.ok) return
+    if (!snapshot.ok) {
+      expireRoom(roomId)
+      return
+    }
 
-    broadcast(roomId, { type: "presence", users: snapshot.value.users })
+    broadcast(roomId, { type: "presence", users: snapshot.value.users, expiresAt: snapshot.value.expiresAt })
   }
 
   function addToRoom(state: ConnectionState, roomId: string): void {
@@ -232,6 +235,7 @@ export function createChatServer(config: AppConfig, options: ChatServerOptions =
 
     const joined = store.join(state.id, roomId, username)
     if (!joined.ok) {
+      if (joined.error === "room_not_found") expireRoom(roomId)
       sendError(state.socket, joined.error)
       return
     }
@@ -307,7 +311,11 @@ export function createChatServer(config: AppConfig, options: ChatServerOptions =
     const left = store.leave(roomId, state.id)
     removeFromRoom(state, roomId)
 
-    if (!left || !rooms.has(roomId)) return
+    if (!left) {
+      expireRoom(roomId)
+      return
+    }
+    if (!rooms.has(roomId)) return
 
     broadcast(roomId, store.systemMessage(`${left.username} left the room`))
     broadcastPresence(roomId)
@@ -331,10 +339,14 @@ export function createChatServer(config: AppConfig, options: ChatServerOptions =
   }
 
   wss.on("connection", (socket, request) => {
+    const forwardedIp = request.headers["x-real-ip"]
+    const ip = config.trustProxy && typeof forwardedIp === "string" && isIP(forwardedIp)
+      ? forwardedIp
+      : request.socket.remoteAddress ?? "unknown"
     const state: ConnectionState = {
       id: randomUUID(),
       socket,
-      ip: request.socket.remoteAddress ?? "unknown",
+      ip,
       roomId: null,
       username: null,
       alive: true,

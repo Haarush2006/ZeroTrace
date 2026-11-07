@@ -6,6 +6,7 @@ describe("loadConfig", () => {
     const config = loadConfig({})
 
     expect(config.port).toBe(8080)
+    expect(config.trustProxy).toBe(false)
     expect(config.ttlMs).toBe(30 * 60 * 1000)
     expect(config.emptyGraceMs).toBe(2 * 60 * 1000)
     expect(config.maxRooms).toBe(5000)
@@ -20,12 +21,14 @@ describe("loadConfig", () => {
   it("reads overrides from the environment", () => {
     const config = loadConfig({
       PORT: "9000",
+      TRUST_PROXY: "1",
       ROOM_TTL_MS: "60000",
       MAX_ROOMS: "10",
       ALLOWED_ORIGINS: "https://chat.example.com, https://staging.example.com ",
     })
 
     expect(config.port).toBe(9000)
+    expect(config.trustProxy).toBe(true)
     expect(config.ttlMs).toBe(60_000)
     expect(config.maxRooms).toBe(10)
     expect(config.allowedOrigins).toEqual([

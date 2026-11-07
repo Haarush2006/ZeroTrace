@@ -2,7 +2,7 @@ import { WebSocket } from "ws"
 import { describe, expect, it } from "vitest"
 import { loadConfig, type AppConfig } from "../src/config"
 import { RoomStore } from "../src/rooms"
-import { createChatServer, silentLogger, type ChatServer } from "../src/server"
+import { createChatServer, silentLogger, type ChatServer, type ChatLogger } from "../src/server"
 
 type WireMessage = { type: string } & Record<string, unknown>
 
@@ -12,7 +12,7 @@ interface TestContext {
   port: number
   advance: (ms: number) => void
   clients: TestClient[]
-  connect: (origin?: string) => Promise<TestClient>
+  connect: (origin?: string, headers?: Record<string, string>) => Promise<TestClient>
   close: () => Promise<void>
 }
 
@@ -28,8 +28,8 @@ class TestClient {
   private closeWaiters: Array<{ resolve: (code: number) => void; timer: ReturnType<typeof setTimeout> }> =
     []
 
-  constructor(port: number, origin = "http://localhost:3000") {
-    this.ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, { origin })
+  constructor(port: number, origin = "http://localhost:3000", headers?: Record<string, string>) {
+    this.ws = new WebSocket(`ws://127.0.0.1:${port}/ws`, { origin, headers })
 
     this.ws.on("message", (raw) => {
       const message = JSON.parse(raw.toString()) as WireMessage
@@ -54,8 +54,8 @@ class TestClient {
     })
   }
 
-  static connect(port: number, origin?: string): Promise<TestClient> {
-    const client = new TestClient(port, origin)
+  static connect(port: number, origin?: string, headers?: Record<string, string>): Promise<TestClient> {
+    const client = new TestClient(port, origin, headers)
 
     return new Promise<TestClient>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("timed out connecting")), 2_000)
@@ -116,7 +116,7 @@ class TestClient {
   }
 }
 
-async function start(options: { ttlMs?: number; emptyGraceMs?: number } = {}): Promise<TestContext> {
+async function start(options: { ttlMs?: number; emptyGraceMs?: number; maxUsersPerRoom?: number; heartbeatMs?: number; trustProxy?: boolean; logger?: ChatLogger } = {}): Promise<TestContext> {
   let now = 1_000_000
 
   const store = new RoomStore({
@@ -124,17 +124,18 @@ async function start(options: { ttlMs?: number; emptyGraceMs?: number } = {}): P
     emptyGraceMs: options.emptyGraceMs ?? 5_000,
     maxRooms: 100,
     maxMessagesPerRoom: 100,
-    maxUsersPerRoom: 10,
+    maxUsersPerRoom: options.maxUsersPerRoom ?? 10,
     now: () => now,
   })
 
   const config: AppConfig = {
     ...loadConfig({}),
+    trustProxy: options.trustProxy ?? false,
     sweepMs: 100_000,
-    heartbeatMs: 100_000,
+    heartbeatMs: options.heartbeatMs ?? 100_000,
   }
 
-  const server = createChatServer(config, { store, logger: silentLogger })
+  const server = createChatServer(config, { store, logger: options.logger ?? silentLogger })
   const { port } = await server.listen(0, "127.0.0.1")
   const clients: TestClient[] = []
 
@@ -146,8 +147,8 @@ async function start(options: { ttlMs?: number; emptyGraceMs?: number } = {}): P
       now += ms
     },
     clients,
-    connect: async (origin?: string) => {
-      const client = await TestClient.connect(port, origin)
+    connect: async (origin?: string, headers?: Record<string, string>) => {
+      const client = await TestClient.connect(port, origin, headers)
       clients.push(client)
       return client
     },
@@ -185,6 +186,30 @@ async function waitUntil(predicate: () => boolean, timeoutMs = 2_000): Promise<v
 }
 
 describe("HTTP surface", () => {
+  it.each([
+    { trustProxy: true, valid: true, separate: true },
+    { trustProxy: false, valid: true, separate: false },
+    { trustProxy: true, valid: false, separate: false },
+  ])("isolates create buckets only for trusted valid proxy IPs: %j", async ({ trustProxy, valid, separate }) => {
+    const ctx = await start({ trustProxy })
+    const ip = (n: number) => valid ? `192.0.2.${n}` : `invalid-${n}, 192.0.2.1`
+    try {
+      for (let index = 0; index < 20; index++) {
+        const client = await ctx.connect(undefined, { "x-real-ip": ip(1) })
+        await createRoom(client)
+      }
+      const limited = await ctx.connect(undefined, { "x-real-ip": ip(1) })
+      limited.send({ type: "create", username: "Limited" })
+      expect((await limited.waitForType("error")).code).toBe("rate_limited")
+      const other = await ctx.connect(undefined, { "x-real-ip": ip(2) })
+      other.send({ type: "create", username: "Other" })
+      if (separate) await other.waitForType("ready")
+      else expect((await other.waitForType("error")).code).toBe("rate_limited")
+    } finally {
+      await ctx.close()
+    }
+  })
+
   it("serves a health check", async () => {
     const ctx = await start()
 
@@ -233,6 +258,139 @@ describe("HTTP surface", () => {
 })
 
 describe("room lifecycle over the wire", () => {
+  it("drops a client above the buffered-byte limit and cleans up membership", async () => {
+    const ctx = await start()
+    try {
+      const alice = await ctx.connect()
+      const { roomId } = await createRoom(alice)
+      const socket = [...ctx.server.wss.clients][0]!
+      // Simulate a saturated transport; do not depend on OS buffer sizes.
+      Object.defineProperty(socket, "bufferedAmount", { get: () => 1_000_001 })
+      alice.send({ type: "chat", message: "trigger backpressure check" })
+      expect(await alice.waitForClose()).toBe(1006)
+      await waitUntil(() => {
+        const room = ctx.store.snapshot(String(roomId))
+        return room.ok && room.value.users.length === 0
+      })
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  it("logs expiry without logging message content or room capabilities", async () => {
+    const logs: string[] = []
+    const ctx = await start({ logger: {
+      info: (message) => logs.push(message),
+      error: (message, error) => logs.push(`${message} ${String(error)}`),
+    } })
+    try {
+      const alice = await ctx.connect()
+      const { roomId } = await createRoom(alice)
+      alice.send({ type: "chat", message: "private-content-marker" })
+      await alice.waitForType("chat")
+      ctx.advance(60_001)
+      ctx.server.sweepNow()
+      await alice.waitForType("expired")
+      expect(logs.join("\n")).toContain("expired 1 room(s)")
+      expect(logs.join("\n")).not.toContain("private-content-marker")
+      expect(logs.join("\n")).not.toContain(String(roomId))
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  it("updates existing clients with the authoritative expiry after a join", async () => {
+    const ctx = await start()
+    try {
+      const alice = await ctx.connect()
+      const ready = await createRoom(alice)
+      ctx.advance(10_000)
+      const bob = await ctx.connect()
+      const joined = await joinRoom(bob, ready.roomId, "Bob")
+      const presence = await alice.waitForType("presence")
+      expect(presence.expiresAt).toBe(joined.expiresAt)
+      expect(presence.expiresAt).toBe(Number(ready.expiresAt) + 10_000)
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  it("admits only one concurrent join into the last slot", async () => {
+    const ctx = await start({ maxUsersPerRoom: 2 })
+    try {
+      const alice = await ctx.connect()
+      const { roomId } = await createRoom(alice)
+      const bob = await ctx.connect()
+      const charlie = await ctx.connect()
+      bob.send({ type: "join", roomId, username: "Bob" })
+      charlie.send({ type: "join", roomId, username: "Charlie" })
+      const replies = await Promise.all([bob, charlie].map((client) =>
+        client.waitFor((message) => message.type === "ready" || message.type === "error", "join result")))
+      expect(replies.filter((message) => message.type === "ready")).toHaveLength(1)
+      expect(replies.find((message) => message.type === "error")?.code).toBe("room_full")
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  it("disconnects an unresponsive client through heartbeat cleanup", async () => {
+    const ctx = await start({ heartbeatMs: 50 })
+    const socket = new WebSocket(`ws://127.0.0.1:${ctx.port}/ws`, {
+      origin: "http://localhost:3000", autoPong: false,
+    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        socket.once("open", resolve)
+        socket.once("error", reject)
+      })
+      const closed = new Promise<number>((resolve) => socket.once("close", resolve))
+      socket.send(JSON.stringify({ type: "create", username: "Silent" }))
+      expect(await closed).toBe(1006)
+      await waitUntil(() => ctx.server.wss.clients.size === 0)
+      ctx.advance(5001)
+      ctx.server.sweepNow()
+      expect(ctx.store.size).toBe(0)
+    } finally {
+      socket.terminate()
+      await ctx.close()
+    }
+  })
+
+  it("expires existing members when a late join discovers an unswept expiry", async () => {
+    const ctx = await start({ ttlMs: 1000 })
+    try {
+      const alice = await ctx.connect()
+      const { roomId } = await createRoom(alice)
+      ctx.advance(1001)
+      const bob = await ctx.connect()
+      bob.send({ type: "join", roomId, username: "Bob" })
+      expect((await bob.waitForType("error")).code).toBe("room_not_found")
+      ctx.server.sweepNow()
+      await alice.waitForType("expired")
+      expect(await alice.waitForClose()).toBe(4001)
+    } finally {
+      await ctx.close()
+    }
+  })
+
+  it("expires remaining members when a departure discovers an unswept expiry", async () => {
+    const ctx = await start({ ttlMs: 1000 })
+    try {
+      const alice = await ctx.connect()
+      const { roomId } = await createRoom(alice)
+      const bob = await ctx.connect()
+      await joinRoom(bob, roomId, "Bob")
+      ctx.advance(1001)
+      bob.ws.close()
+      await bob.waitForClose()
+      await waitUntil(() => ctx.store.size === 0)
+      ctx.server.sweepNow()
+      await alice.waitForType("expired")
+    } finally {
+      await ctx.close()
+    }
+  })
+
   it("creates a room and sends history, expiry and presence", async () => {
     const ctx = await start()
 

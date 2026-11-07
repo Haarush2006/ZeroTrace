@@ -140,7 +140,11 @@ export function useRoom() {
         }
 
         case "presence": {
-          setState((previous) => ({ ...previous, users: message.users }))
+          setState((previous) => ({
+            ...previous,
+            users: message.users,
+            expiresAt: message.expiresAt ?? previous.expiresAt,
+          }))
           return
         }
 
@@ -173,7 +177,7 @@ export function useRoom() {
             "already_joined",
             "too_many_rooms",
             "invalid_payload",
-          ].includes(message.code)
+          ].includes(message.code) || intentRef.current?.action === "create"
 
           if (!fatal) {
             setState((previous) => ({ ...previous, error: message.message }))
@@ -334,21 +338,34 @@ export function useRoom() {
   useEffect(() => {
     if (!hydrated) return
 
-    const roomId = roomIdFromHash(window.location.hash)
-    const username = sessionStorage.getItem(USERNAME_KEY) ?? ""
-
     // Auto-rejoin only when the room link was opened by someone we already know.
     // Otherwise the landing form pre-fills the room and asks for a username.
     // Deferred so the connection's initial state update happens outside the
     // effect body (avoids a cascading render warning).
-    const start = setTimeout(() => {
+    const navigate = () => {
+      const roomId = roomIdFromHash(window.location.hash)
+      const username = sessionStorage.getItem(USERNAME_KEY) ?? ""
+      if (roomId && intentRef.current?.roomId === roomId) return
+
       if (roomId && username) {
+        attemptRef.current = 0
         connect({ action: "join", roomId, username }, false)
+      } else {
+        clearRetry()
+        intentRef.current = null
+        closedByUsRef.current = true
+        const socket = socketRef.current
+        socketRef.current = null
+        socket?.close(1000, "navigating")
+        setState({ ...initialState, roomId, username })
       }
-    }, 0)
+    }
+    const start = setTimeout(navigate, 0)
+    window.addEventListener("hashchange", navigate)
 
     return () => {
       clearTimeout(start)
+      window.removeEventListener("hashchange", navigate)
       closedByUsRef.current = true
       clearRetry()
       intentRef.current = null

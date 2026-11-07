@@ -55,6 +55,7 @@ export default function Home() {
   } else {
     content = (
       <Landing
+        key={state.roomId ?? "landing"}
         initialRoomId={state.roomId}
         initialUsername={state.username}
         error={state.error}

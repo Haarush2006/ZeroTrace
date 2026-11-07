@@ -6,7 +6,9 @@
 
 	@backend path /ws /health
 	handle @backend {
-		reverse_proxy backend:8080
+		reverse_proxy backend:8080 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 
 	handle {

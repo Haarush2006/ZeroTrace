@@ -1,4 +1,6 @@
 export interface AppConfig {
+  /** Only enable behind a private proxy that overwrites X-Real-IP. */
+  trustProxy: boolean
   port: number
   /** Idle time after the last activity before a room is destroyed. */
   ttlMs: number
@@ -32,6 +34,7 @@ function originList(value: string | undefined): string[] {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return {
+    trustProxy: env.TRUST_PROXY === "1",
     port: positiveInt(env.PORT, 8080),
     ttlMs: positiveInt(env.ROOM_TTL_MS, 30 * 60 * 1000),
     emptyGraceMs: positiveInt(env.ROOM_EMPTY_GRACE_MS, 2 * 60 * 1000),

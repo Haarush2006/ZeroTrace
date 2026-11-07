@@ -43,7 +43,7 @@ The server listens on `http://localhost:8080` with the WebSocket endpoint at
 ```sh
 npm run build     # compile to dist/
 npm start         # run the compiled server
-npm test          # 63 unit + integration tests
+npm test          # unit + integration tests
 npm run typecheck # typecheck src and tests
 ```
 
@@ -84,7 +84,7 @@ A connection can be in one room at a time. Unknown fields are rejected.
 { "type": "ready", "roomId": "...", "expiresAt": 1730000000000, "ttlMs": 1800000, "history": [], "users": ["Alice"] }
 { "type": "chat", "id": "...", "sender": "Alice", "message": "Hello", "timestamp": 1730000000000 }
 { "type": "system", "id": "...", "sender": "system", "message": "Bob joined the room", "timestamp": 1730000000000 }
-{ "type": "presence", "users": ["Alice", "Bob"] }
+{ "type": "presence", "users": ["Alice", "Bob"], "expiresAt": 1730000060000 }
 { "type": "expired" }
 { "type": "error", "code": "room_not_found", "message": "This room has expired or never existed" }
 ```
@@ -108,6 +108,7 @@ All values are read from the environment (see `.env.example`).
 | `MAX_MESSAGES_PER_ROOM` | `500` | History cap per room |
 | `MAX_USERS_PER_ROOM` | `50` | Members per room |
 | `MAX_PAYLOAD_BYTES` | `16384` | Largest accepted WebSocket frame |
+| `TRUST_PROXY` | `0` | Set to `1` only behind a private proxy that overwrites `X-Real-IP` |
 | `HEARTBEAT_MS` | `30000` | Ping interval |
 | `SWEEP_MS` | `15000` | Expiry sweep interval |
 | `ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated origin allowlist |

@@ -87,7 +87,7 @@ export type ServerMessage =
   | ReadyMessage
   | ChatMessage
   | SystemMessage
-  | { type: "presence"; users: string[] }
+  | { type: "presence"; users: string[]; expiresAt?: number }
   | { type: "expired" }
   | { type: "error"; code: ErrorCode; message: string }
 

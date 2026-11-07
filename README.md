@@ -39,7 +39,7 @@ Run these from the repository root:
 npm run build           # protocol + backend + frontend
 npm run build:backend   # protocol + backend
 npm run build:frontend  # protocol + frontend (standalone output)
-npm test                # backend Vitest suite (63 tests)
+npm test                # backend Vitest suite
 npm run typecheck       # protocol + backend + frontend
 npm run lint            # frontend ESLint
 npm run test:e2e        # Playwright; starts both servers
@@ -56,8 +56,11 @@ npm run test:e2e
 ```
 
 Playwright starts both servers itself. Expiry and reconnect run against a
-scripted socket so they are deterministic; create/join/chat/expired-link run
-against the real backend.
+scripted socket for deterministic failure cases and against isolated real
+backends for lifecycle, capacity, reconnect, and restart coverage.
+
+See [TESTING.md](TESTING.md) for verified results, coverage limits, and Git Bash
+commands for development, production standalone, and Firefox testing.
 
 ## Deploy with Docker Compose
 
@@ -102,6 +105,10 @@ work through the edge.
 - **Origin allowlist.** The backend rejects WebSocket upgrades unless `Origin`
   exactly matches an entry in `ALLOWED_ORIGINS`. Keep it in sync with
   `PUBLIC_ORIGIN`.
+- **Proxy rate limits.** Compose enables `TRUST_PROXY=1` and Caddy overwrites
+  `X-Real-IP` with its direct client's IP. Only enable this setting when the
+  backend is private and reachable through that trusted proxy. Direct local
+  runs ignore forwarded headers by default.
 - **No end-to-end encryption.** The server can read message plaintext. The
   privacy guarantee is ephemerality: nothing is written to disk and rooms
   self-destruct after inactivity.

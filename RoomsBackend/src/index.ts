@@ -9,7 +9,7 @@ server
   .then(({ port }) => {
     console.log(`[chat] listening on :${port} (ws path /ws)`)
     console.log(
-      `[chat] rooms self-destruct after ${Math.round(config.ttlMs / 60000)} min of inactivity ` +
+      `[chat] rooms self-destruct after ${config.ttlMs / 1000}s of inactivity ` +
         `(empty grace ${Math.round(config.emptyGraceMs / 1000)}s)`,
     )
   })

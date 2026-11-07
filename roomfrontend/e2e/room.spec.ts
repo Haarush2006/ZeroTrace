@@ -76,7 +76,8 @@ test.describe("room lifecycle", () => {
     await expect(page.getByText("Connected")).toBeVisible()
   })
 
-  test("the copy button puts the room link on the clipboard", async ({ page, context }) => {
+  test("the copy button puts the room link on the clipboard", async ({ page, context, browserName }) => {
+    test.skip(browserName !== "chromium", "Playwright clipboard permission grants require Chromium")
     await context.grantPermissions(["clipboard-read", "clipboard-write"])
     const roomId = await createRoom(page, "Alice")
 
