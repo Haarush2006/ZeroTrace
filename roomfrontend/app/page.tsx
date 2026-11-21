@@ -66,6 +66,6 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-0 md:p-4">{content}</main>
+    <main className="flex min-h-dvh min-w-0 items-center justify-center p-0 md:p-4">{content}</main>
   )
 }

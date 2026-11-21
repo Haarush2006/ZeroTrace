@@ -31,8 +31,8 @@ export default function MessageInput({ onSendMessage, isConnected }: MessageInpu
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-border bg-card/50 p-3 md:p-4">
-      <div className="flex gap-2 md:gap-3">
+    <form onSubmit={handleSubmit} className="shrink-0 border-t border-border bg-card/50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:p-4">
+      <div className="flex min-w-0 gap-2 md:gap-3">
         <Input
           ref={inputRef}
           type="text"
@@ -42,7 +42,7 @@ export default function MessageInput({ onSendMessage, isConnected }: MessageInpu
           onChange={(event) => setMessage(event.target.value)}
           disabled={!isConnected}
           aria-label="Message"
-          className="flex-1 border-border bg-input font-mono text-sm"
+          className="min-w-0 flex-1 border-border bg-input font-mono text-base md:text-sm"
         />
         <Button
           type="submit"

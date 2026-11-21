@@ -109,8 +109,8 @@ export default function ChatPanel({
     remaining === null ? null : remaining === 0 ? "expiring…" : `expires in ${formatRemaining(remaining)}`
 
   return (
-    <div className="flex h-screen w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-background md:h-[90vh]">
-      <header className="border-b border-border bg-card/50 px-4 py-3 md:px-6">
+    <div className="flex h-dvh min-h-0 min-w-0 w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-background md:h-[90dvh]">
+      <header className="shrink-0 border-b border-border bg-card/50 px-4 py-3 md:px-6">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">

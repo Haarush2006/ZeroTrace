@@ -135,7 +135,7 @@ export default function Landing({
                   setRoomInput(event.target.value)
                   setLocalError(null)
                 }}
-                className="border-border bg-input font-mono text-xs"
+                className="border-border bg-input font-mono text-base md:text-xs"
               />
             </div>
           )}
@@ -155,7 +155,7 @@ export default function Landing({
                 setUsername(event.target.value)
                 setLocalError(null)
               }}
-              className="border-border bg-input font-mono text-sm"
+              className="border-border bg-input font-mono text-base md:text-sm"
             />
           </div>
 

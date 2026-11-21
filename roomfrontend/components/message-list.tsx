@@ -27,14 +27,14 @@ export default function MessageList({ messages, username, connecting }: MessageL
 
   if (connecting) {
     return (
-      <div className="flex flex-1 items-center justify-center bg-background p-6">
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-background p-6">
         <p className="font-mono text-xs text-muted-foreground">Connecting to the room…</p>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 space-y-4 overflow-y-auto bg-background p-4 md:p-6">
+    <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto overscroll-contain bg-background p-4 [overflow-wrap:anywhere] md:p-6">
       {messages.length === 0 ? (
         <div className="flex h-full items-center justify-center">
           <p className="text-center text-sm text-muted-foreground">
@@ -61,7 +61,7 @@ export default function MessageList({ messages, username, connecting }: MessageL
                     {formatTime(message.timestamp)}
                   </span>
                 </div>
-                <p className="whitespace-pre-wrap break-words pl-0 text-sm leading-relaxed text-foreground">
+                <p className="whitespace-pre-wrap pl-0 text-sm leading-relaxed text-foreground">
                   {message.message}
                 </p>
               </div>
