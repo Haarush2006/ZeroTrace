@@ -27,7 +27,11 @@ export default function MessageInput({ onSendMessage, isConnected }: MessageInpu
 
     onSendMessage(trimmed)
     setMessage("")
-    inputRef.current?.focus()
+    if (window.matchMedia("(max-width: 767px), (pointer: coarse)").matches) {
+      inputRef.current?.blur()
+    } else {
+      inputRef.current?.focus()
+    }
   }
 
   return (
