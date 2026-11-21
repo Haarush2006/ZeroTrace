@@ -77,6 +77,83 @@ async function openRoom(page: Page): Promise<void> {
 }
 
 test.describe("expiry and reconnect (scripted socket)", () => {
+  test("automatic room rejoin retries a brief username conflict after refresh", async ({ page }) => {
+    const attempts: string[] = []
+    await page.addInitScript(() => {
+      sessionStorage.setItem("chat:user", "Max")
+    })
+    await page.routeWebSocket(/\/ws$/, (ws) => {
+      ws.onMessage((raw) => {
+        const message = JSON.parse(raw.toString()) as Wire
+        if (message.type !== "join") return
+        attempts.push(message.type)
+        if (attempts.length === 1) {
+          send(ws, {
+            type: "error",
+            code: "username_taken",
+            message: "That username is already taken in this room",
+          })
+          return
+        }
+        send(ws, ready())
+      })
+    })
+
+    await page.goto(`/#r=${ROOM_ID}`)
+    await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeEnabled()
+    expect(attempts).toHaveLength(2)
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
+  })
+
+  test("automatic rejoin stops retrying a genuinely occupied username", async ({ page }) => {
+    let joins = 0
+    await page.addInitScript(() => sessionStorage.setItem("chat:user", "Max"))
+    await page.routeWebSocket(/\/ws$/, (ws) => {
+      ws.onMessage(() => {
+        joins += 1
+        send(ws, { type: "error", code: "username_taken", message: "That username is already taken in this room" })
+      })
+    })
+    await page.goto(`/#r=${ROOM_ID}`)
+    await expect(page.getByText("That username is already taken in this room")).toBeVisible({ timeout: 15_000 })
+    expect(joins).toBe(7)
+    await expect(page.getByRole("button", { name: "Join room", exact: true })).toBeVisible()
+  })
+
+  test("a dropped connection retries a stale username before restoring history", async ({ page }) => {
+    let joins = 0
+    await page.routeWebSocket(/\/ws$/, (ws) => {
+      ws.onMessage((raw) => {
+        const message = JSON.parse(raw.toString()) as Wire
+        if (message.type === "create") {
+          send(ws, ready())
+          return
+        }
+        if (message.type === "chat") {
+          void ws.close({ code: 1011, reason: "connection interrupted" })
+          return
+        }
+        if (message.type === "join") {
+          joins += 1
+          if (joins === 1) {
+            send(ws, { type: "error", code: "username_taken", message: "That username is already taken in this room" })
+          } else {
+            send(ws, {
+              ...ready(),
+              history: [{ type: "chat", id: "saved", sender: "Alice", message: "saved history", timestamp: Date.now() }],
+            })
+          }
+        }
+      })
+    })
+    await openRoom(page)
+    await page.getByRole("textbox", { name: "Message", exact: true }).fill("trigger disconnect")
+    await page.getByRole("button", { name: "Send message", exact: true }).click()
+    await expect(page.getByText("saved history", { exact: true })).toBeVisible()
+    expect(joins).toBe(2)
+    await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeEnabled()
+  })
+
   test("presence refreshes the countdown using the server deadline", async ({ page }) => {
     fakeBackend(page)
     await openRoom(page)

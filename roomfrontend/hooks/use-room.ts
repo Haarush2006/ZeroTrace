@@ -38,6 +38,7 @@ interface Intent {
   action: "create" | "join"
   username: string
   roomId?: string
+  retryUsernameConflict?: boolean
 }
 
 const USERNAME_KEY = "chat:user"
@@ -91,7 +92,7 @@ export function useRoom() {
         case "ready": {
           attemptRef.current = 0
           const username = intentRef.current?.username ?? ""
-          intentRef.current = { action: "join", roomId: message.roomId, username }
+          intentRef.current = { action: "join", roomId: message.roomId, username, retryUsernameConflict: true }
 
           if (typeof window !== "undefined") {
             sessionStorage.setItem(USERNAME_KEY, username)
@@ -170,6 +171,24 @@ export function useRoom() {
         }
 
         case "error": {
+          const intent = intentRef.current
+          if (
+            message.code === "username_taken" &&
+            intent?.action === "join" &&
+            intent.retryUsernameConflict &&
+            attemptRef.current < MAX_RETRIES
+          ) {
+            clearRetry()
+            const attempt = ++attemptRef.current
+            setState((previous) => ({ ...previous, status: "reconnecting", error: null }))
+            retryTimerRef.current = setTimeout(() => {
+              retryTimerRef.current = null
+              const nextIntent = intentRef.current
+              if (nextIntent?.retryUsernameConflict) connectRef.current(nextIntent, true)
+            }, Math.min(250 * 2 ** (attempt - 1), 2_000))
+            return
+          }
+
           const fatal = [
             "room_not_found",
             "room_full",
@@ -349,7 +368,7 @@ export function useRoom() {
 
       if (roomId && username) {
         attemptRef.current = 0
-        connect({ action: "join", roomId, username }, false)
+        connect({ action: "join", roomId, username, retryUsernameConflict: true }, false)
       } else {
         clearRetry()
         intentRef.current = null
