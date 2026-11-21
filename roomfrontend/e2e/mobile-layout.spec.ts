@@ -59,3 +59,50 @@ test("mobile chat wraps long content and fits a shorter viewport", async ({ page
     return bounds !== null && bounds.y >= 0 && bounds.y + bounds.height <= 430
   }).toBe(true)
 })
+
+test("chat controls do not overlap and consecutive messages share a sender label", async ({ page }) => {
+  await page.routeWebSocket(/\/ws$/, (ws) => {
+    ws.onMessage((raw) => {
+      if (JSON.parse(raw.toString()).type !== "create") return
+      const timestamp = Date.now()
+      const chat = (id: string, sender: string) => ({
+        type: "chat", id, sender, message: `Message ${id}`, timestamp,
+      })
+      ws.send(JSON.stringify({
+        type: "ready",
+        roomId: "a".repeat(22),
+        expiresAt: timestamp + 1_800_000,
+        ttlMs: 1_800_000,
+        users: ["Alice", "Max"],
+        history: [
+          chat("1", "Max"),
+          chat("2", "Max"),
+          chat("3", "Alice"),
+          chat("4", "Max"),
+          { type: "system", id: "notice", sender: "system", message: "A user joined", timestamp },
+          chat("5", "Max"),
+        ],
+      }))
+    })
+  })
+  await page.goto("/")
+  await page.getByLabel("Username").fill("Alice")
+  await page.getByRole("button", { name: "Create a room" }).click()
+  await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeEnabled()
+  await expect(page.getByText("Max", { exact: true })).toHaveCount(3)
+  await expect(page.getByText("you", { exact: true })).toHaveCount(1)
+  await expect(page.locator("time")).toHaveCount(5)
+  for (const time of await page.locator("time").all()) {
+    await expect(time).toHaveText(/^\d{1,2}:\d{2} [AP]M$/)
+  }
+  for (const width of [320, 393, 768]) {
+    await page.setViewportSize({ width, height: 852 })
+    await expect(page.getByRole("button", { name: "Toggle theme" })).toHaveCount(1)
+    const toggle = await page.getByRole("button", { name: "Toggle theme" }).boundingBox()
+    const leave = await page.getByRole("button", { name: "Leave", exact: true }).boundingBox()
+    expect(toggle).not.toBeNull()
+    expect(leave).not.toBeNull()
+    expect(toggle!.x + toggle!.width).toBeLessThanOrEqual(leave!.x)
+    await expectNoHorizontalOverflow(page)
+  }
+})

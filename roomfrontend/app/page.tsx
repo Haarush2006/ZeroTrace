@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react"
 import ChatPanel from "@/components/chat-panel"
 import ExpiredRoom from "@/components/expired-room"
 import Landing from "@/components/landing"
+import ThemeToggle from "@/components/theme-toggle"
 import { useRoom } from "@/hooks/use-room"
 
 function Splash({ label }: { label: string }) {
@@ -66,6 +67,13 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-dvh min-w-0 items-center justify-center p-0 md:p-4">{content}</main>
+    <main className="flex min-h-dvh min-w-0 items-center justify-center p-0 md:p-4">
+      {!(inRoom && state.roomId) && (
+        <div className="fixed right-4 top-4 z-50">
+          <ThemeToggle />
+        </div>
+      )}
+      {content}
+    </main>
   )
 }

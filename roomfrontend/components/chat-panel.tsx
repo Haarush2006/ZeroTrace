@@ -5,6 +5,7 @@ import { Check, Copy, Users, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import MessageList from "./message-list"
 import MessageInput from "./message-input"
+import ThemeToggle from "./theme-toggle"
 import type { RoomStatus } from "@/hooks/use-room"
 import { roomLink, type RoomMessage } from "@/lib/protocol"
 
@@ -153,15 +154,18 @@ export default function ChatPanel({
             </div>
           </div>
 
-          <Button
-            type="button"
-            onClick={onLeave}
-            variant="outline"
-            size="sm"
-            className="shrink-0 bg-transparent text-xs"
-          >
-            Leave
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeToggle />
+            <Button
+              type="button"
+              onClick={onLeave}
+              variant="outline"
+              size="sm"
+              className="shrink-0 bg-transparent text-xs"
+            >
+              Leave
+            </Button>
+          </div>
         </div>
 
         <div className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
