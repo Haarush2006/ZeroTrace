@@ -54,7 +54,15 @@ export default function MessageList({ messages, username, connecting }: MessageL
                 key={message.id}
                 className="mt-4 rounded border border-border bg-muted/30 px-4 py-3 text-center first:mt-0"
               >
-                <p className="font-mono text-xs text-muted-foreground">➜ {message.message}</p>
+                <div className="flex items-center justify-center gap-2">
+                  <p className="font-mono text-xs text-muted-foreground">➜ {message.message}</p>
+                  <time
+                    dateTime={new Date(message.timestamp).toISOString()}
+                    className="shrink-0 text-[11px] text-muted-foreground/70"
+                  >
+                    {formatTime(message.timestamp)}
+                  </time>
+                </div>
               </div>
             ) : (
               <div key={message.id} className={continuesSender ? "mt-1" : "mt-4 first:mt-0"}>

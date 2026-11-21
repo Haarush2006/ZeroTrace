@@ -101,7 +101,7 @@ test("chat controls do not overlap and consecutive messages share a sender label
   await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeEnabled()
   await expect(page.getByText("Max", { exact: true })).toHaveCount(3)
   await expect(page.getByText("you", { exact: true })).toHaveCount(1)
-  await expect(page.locator("time")).toHaveCount(5)
+  await expect(page.locator("time")).toHaveCount(6)
   for (const time of await page.locator("time").all()) {
     await expect(time).toHaveText(/^\d{1,2}:\d{2} [AP]M$/)
   }
